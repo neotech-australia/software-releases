@@ -2,9 +2,51 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-python3 -m venv .venv
+
+APP_NAME="Tiltmeter Collector Installer App"
+APP_BUNDLE="${APP_NAME}.app"
+VERSION="0.1.0"
+ARCH="$(uname -m)"
+if [[ "${ARCH}" == "arm64" ]]; then
+  RELEASE_ARCH="mac-arm64"
+else
+  RELEASE_ARCH="mac-${ARCH}"
+fi
+
+DMG_NAME="tiltmeter-collector-installer-${RELEASE_ARCH}-${VERSION}.dmg"
+BIN_DIR="$(cd .. && pwd)/bin"
+
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+"${PYTHON_BIN}" - <<'PY'
+import sys
+
+if sys.version_info < (3, 10):
+    raise SystemExit("Python 3.10 or newer is required.")
+
+try:
+    import tkinter
+except Exception as exc:
+    raise SystemExit(f"Python tkinter support is required for the macOS GUI build: {exc}")
+PY
+
+if [[ -x .venv/bin/python ]] && ! .venv/bin/python -c "import subprocess" >/dev/null 2>&1; then
+  rm -rf .venv
+fi
+
+"${PYTHON_BIN}" -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e ".[build]"
+rm -rf build "release/${APP_NAME}" "release/${APP_BUNDLE}" "release/${DMG_NAME}"
 python -m PyInstaller --noconfirm --distpath release tiltmeter-installer.spec
-echo "Built: release/Tiltmeter Collector Installer App"
+mkdir -p "${BIN_DIR}"
+hdiutil create \
+  -volname "Tiltmeter Collector Installer" \
+  -srcfolder "release/${APP_BUNDLE}" \
+  -ov \
+  -format UDZO \
+  "release/${DMG_NAME}"
+cp "release/${DMG_NAME}" "${BIN_DIR}/${DMG_NAME}"
+echo "Built: release/${APP_BUNDLE}"
+echo "Built: release/${DMG_NAME}"
+echo "Copied: ${BIN_DIR}/${DMG_NAME}"

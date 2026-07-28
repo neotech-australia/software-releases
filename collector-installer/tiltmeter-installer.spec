@@ -46,3 +46,19 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
 )
+
+if sys.platform == "darwin":
+    app = BUNDLE(
+        exe,
+        name="Tiltmeter Collector Installer App.app",
+        icon=str(ICON),
+        bundle_identifier="com.neotechaustralia.tiltmeter.collector-installer",
+        info_plist={
+            "CFBundleDisplayName": "Tiltmeter Collector Installer",
+            "CFBundleName": "Tiltmeter Collector Installer",
+            "CFBundleShortVersionString": "0.1.0",
+            "CFBundleVersion": "0.1.0",
+            "LSMinimumSystemVersion": "11.0",
+            "NSHighResolutionCapable": True,
+        },
+    )
