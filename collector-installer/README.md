@@ -84,6 +84,8 @@ cd ..\bin
 .\tiltmeter-collector-installer-win64-0.1.0.exe install --dashboard-port 443
 ```
 
+The Windows `.exe` is built with console output enabled so `--help`, `status`, `logs`, and install progress print in PowerShell or Command Prompt. Running the same `.exe` with no arguments opens the GUI.
+
 Windows terminal status and logs:
 
 ```powershell

@@ -83,7 +83,7 @@ else:
         upx=True,
         upx_exclude=[],
         runtime_tmpdir=None,
-        console=False,
+        console=True,
         icon=str(ICON),
         disable_windowed_traceback=False,
         argv_emulation=False,
