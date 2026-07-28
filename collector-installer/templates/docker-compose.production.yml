@@ -1,0 +1,82 @@
+services:
+  dashboard:
+    restart: always
+    image: ${DASHBOARD_IMAGE:-ghcr.io/neotech-australia/tiltmeter-platform/dashboard:latest}
+    environment:
+      DASHBOARD_API_UPSTREAM: https://collector:8000
+    ports:
+      - "${DASHBOARD_PORT:-443}:443"
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - collector
+    logging:
+      driver: json-file
+      options:
+        max-size: 10M
+        max-file: "5"
+
+  collector:
+    restart: always
+    image: ${COLLECTOR_IMAGE:-ghcr.io/neotech-australia/tiltmeter-platform/collector:latest}
+    env_file:
+      - .env
+    environment:
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+      ALLOW_INSECURE_JWT_SECRET: ${ALLOW_INSECURE_JWT_SECRET:-false}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-collector_refresh_token}
+      REFRESH_COOKIE_PATH: ${REFRESH_COOKIE_PATH:-/admin}
+      API_VERSION: ${API_VERSION:-1.0.0}
+      API_HOST: ${API_HOST:-0.0.0.0}
+      API_PORT: ${API_PORT:-8000}
+      API_SSL_CERTFILE: ${API_SSL_CERTFILE:-/app/certs/localhost.pem}
+      API_SSL_KEYFILE: ${API_SSL_KEYFILE:-/app/certs/localhost-key.pem}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://localhost,https://127.0.0.1,http://localhost:3000,http://127.0.0.1:3000}
+      SWAGGER_DOCS_URL: ${SWAGGER_DOCS_URL:-/docs}
+      OPENAPI_URL: ${OPENAPI_URL:-/openapi.json}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://tiltmeter:change-this-local-db-password@postgres:5432/lora}
+      SQL_ECHO: ${SQL_ECHO:-false}
+      DEFAULT_MQTT_HOST: ${DEFAULT_MQTT_HOST:-192.168.0.198}
+      DEFAULT_MQTT_SERVER_PORT: ${DEFAULT_MQTT_SERVER_PORT:-1883}
+      DEFAULT_MQTT_SUBSCRIBE_TOPIC: ${DEFAULT_MQTT_SUBSCRIBE_TOPIC:-application/#}
+      DEFAULT_LOG_RETENTION_DAYS: ${DEFAULT_LOG_RETENTION_DAYS:-30}
+      DEFAULT_LOG_MAX_ROWS: ${DEFAULT_LOG_MAX_ROWS:-10000}
+      DEFAULT_CLOUD_AUTH_API_URL: ${DEFAULT_CLOUD_AUTH_API_URL:-https://api.neogt.com.au/auth/api-client/authenticate}
+      DEFAULT_CLOUD_SYNC_API_URL: ${DEFAULT_CLOUD_SYNC_API_URL:-https://api.neogt.com.au/devices/readings}
+      UVICORN_LOG_LEVEL: ${UVICORN_LOG_LEVEL:-info}
+    expose:
+      - "8000"
+    volumes:
+      - ./certs:/app/certs:ro
+    depends_on:
+      - postgres
+    logging:
+      driver: json-file
+      options:
+        max-size: 10M
+        max-file: "5"
+
+  postgres:
+    restart: always
+    image: postgres:18.1
+    expose:
+      - "5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lora}
+      POSTGRES_USER: ${POSTGRES_USER:-tiltmeter}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      PGDATA: /var/lib/postgresql/18/data
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    logging:
+      driver: json-file
+      options:
+        max-size: 10M
+        max-file: "5"
+
+volumes:
+  postgres-data:
