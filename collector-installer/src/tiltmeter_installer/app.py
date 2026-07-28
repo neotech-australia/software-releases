@@ -31,7 +31,7 @@ from tiltmeter_installer import theme
 class InstallerApp(ctk.CTk):
     def __init__(self) -> None:
         super().__init__()
-        self.title(f"Tiltmeter Platform Installer v{__version__}")
+        self.title(f"Tiltmeter Collector Installer App v{__version__}")
         self.geometry("980x720")
         self.minsize(820, 620)
         self._set_window_icon()
@@ -72,7 +72,7 @@ class InstallerApp(ctk.CTk):
 
         title = ctk.CTkLabel(
             header,
-            text="Tiltmeter Platform Installer",
+            text="Tiltmeter Collector Installer App",
             text_color="#FFFFFF",
             font=ctk.CTkFont(size=22, weight="bold"),
         )

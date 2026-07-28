@@ -31,7 +31,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="Tiltmeter Platform Installer",
+    name="Tiltmeter Collector Installer App",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

@@ -1,4 +1,4 @@
-# Tiltmeter Platform Installer
+# Tiltmeter Collector Installer App
 
 Cross-platform GUI installer for the Tiltmeter Platform production Docker images.
 

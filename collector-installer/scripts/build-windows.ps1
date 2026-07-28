@@ -6,4 +6,4 @@ py -3 -m venv .venv
 python -m pip install --upgrade pip
 python -m pip install -e ".[build]"
 python -m PyInstaller --noconfirm --distpath release tiltmeter-installer.spec
-Write-Host "Built: release\Tiltmeter Platform Installer.exe"
+Write-Host "Built: release\Tiltmeter Collector Installer App.exe"
