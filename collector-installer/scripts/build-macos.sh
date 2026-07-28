@@ -15,6 +15,7 @@ fi
 
 DMG_NAME="tiltmeter-collector-installer-${RELEASE_ARCH}-${VERSION}.dmg"
 BIN_DIR="$(cd .. && pwd)/bin"
+DMG_ROOT="release/dmg-root"
 
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 "${PYTHON_BIN}" - <<'PY'
@@ -35,14 +36,17 @@ fi
 
 "${PYTHON_BIN}" -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e ".[build]"
-rm -rf build "release/${APP_NAME}" "release/${APP_BUNDLE}" "release/${DMG_NAME}"
+python -m pip install --disable-pip-version-check -r requirements.txt "pyinstaller>=6.10.0" "wheel"
+python -m pip install --disable-pip-version-check --no-build-isolation --no-deps -e .
+rm -rf build "release/${APP_NAME}" "release/${APP_BUNDLE}" "release/${DMG_NAME}" "${DMG_ROOT}"
 python -m PyInstaller --noconfirm --distpath release tiltmeter-installer.spec
 mkdir -p "${BIN_DIR}"
+mkdir -p "${DMG_ROOT}"
+cp -R "release/${APP_BUNDLE}" "${DMG_ROOT}/${APP_BUNDLE}"
+ln -s /Applications "${DMG_ROOT}/Applications"
 hdiutil create \
   -volname "Tiltmeter Collector Installer" \
-  -srcfolder "release/${APP_BUNDLE}" \
+  -srcfolder "${DMG_ROOT}" \
   -ov \
   -format UDZO \
   "release/${DMG_NAME}"
