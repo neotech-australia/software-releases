@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import queue
 import socket
+import platform
 import threading
 import tkinter as tk
 import tkinter.messagebox as messagebox
@@ -234,7 +235,10 @@ class InstallerApp(ctk.CTk):
             self._messages.put(("log", "Downloading/installing Docker requirements. Progress output will appear below.\n"))
             result = install_requirements_best_effort(lambda line: self._messages.put(("log", line + "\n")))
             self._messages.put(("log", result.output + "\n"))
-            self._messages.put(("status", "Docker requirement install completed" if result.ok else "Docker requirement install failed"))
+            if result.ok and platform.system().lower() == "windows":
+                self._messages.put(("status", "Docker installed. Close and reopen this app, then click Check Docker."))
+            else:
+                self._messages.put(("status", "Docker requirement install completed" if result.ok else "Docker requirement install failed"))
 
         self._run_background("Installing Docker requirements", worker)
 

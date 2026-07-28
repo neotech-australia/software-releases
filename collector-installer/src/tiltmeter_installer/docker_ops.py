@@ -22,7 +22,11 @@ class CommandResult:
 
 def _command_cwd(cwd: Path | None) -> str | None:
     if cwd is not None:
-        return str(cwd)
+        if cwd.is_dir():
+            return str(cwd)
+        if platform.system().lower() != "windows":
+            return str(cwd)
+
     if platform.system().lower() != "windows":
         return None
 
@@ -125,7 +129,7 @@ def install_requirements_best_effort(on_line: Callable[[str], None] | None = Non
         return CommandResult(False, "Homebrew is not installed. Install Docker Desktop from https://www.docker.com/products/docker-desktop/.")
     if system == "windows":
         if shutil.which("winget"):
-            return stream_command(
+            result = stream_command(
                 [
                     "winget",
                     "install",
@@ -138,6 +142,16 @@ def install_requirements_best_effort(on_line: Callable[[str], None] | None = Non
                 timeout=1800,
                 on_line=on_line,
             )
+            if result.ok:
+                message = (
+                    "Docker Desktop installation completed.\n"
+                    "Close the Tiltmeter Collector Installer App and open it again so Windows refreshes the PATH, "
+                    "then click Check Docker."
+                )
+                if result.output:
+                    message = result.output + "\n\n" + message
+                return CommandResult(True, message)
+            return result
         return CommandResult(False, "winget is not available. Install Docker Desktop from https://www.docker.com/products/docker-desktop/.")
     if shutil.which("apt-get"):
         return stream_command(["sudo", "apt-get", "install", "-y", "docker.io", "docker-compose-plugin"], timeout=1800, on_line=on_line)
@@ -161,6 +175,17 @@ def compose_base_args(install_dir: Path) -> list[str]:
     ]
 
 
+def _check_installation_files(install_dir: Path) -> CommandResult | None:
+    if not install_dir.is_dir():
+        return CommandResult(False, f"Install folder does not exist: {install_dir}")
+    env_file = install_dir / ".env"
+    compose_file = install_dir / "docker-compose.yml"
+    missing = [str(path) for path in (env_file, compose_file) if not path.is_file()]
+    if missing:
+        return CommandResult(False, "Installation files are missing:\n" + "\n".join(missing))
+    return None
+
+
 def docker_login(registry: str, username: str, token: str) -> CommandResult:
     try:
         completed = subprocess.run(
@@ -181,26 +206,44 @@ def docker_login(registry: str, username: str, token: str) -> CommandResult:
 
 
 def pull_images(install_dir: Path, on_line: Callable[[str], None] | None = None) -> CommandResult:
+    installation_error = _check_installation_files(install_dir)
+    if installation_error is not None:
+        return installation_error
     return stream_command(compose_base_args(install_dir) + ["pull"], cwd=install_dir, timeout=1800, on_line=on_line)
 
 
 def start_stack(install_dir: Path) -> CommandResult:
+    installation_error = _check_installation_files(install_dir)
+    if installation_error is not None:
+        return installation_error
     return run_command(compose_base_args(install_dir) + ["up", "-d"], cwd=install_dir, timeout=600)
 
 
 def stop_stack(install_dir: Path) -> CommandResult:
+    installation_error = _check_installation_files(install_dir)
+    if installation_error is not None:
+        return installation_error
     return run_command(compose_base_args(install_dir) + ["stop"], cwd=install_dir, timeout=300)
 
 
 def restart_stack(install_dir: Path) -> CommandResult:
+    installation_error = _check_installation_files(install_dir)
+    if installation_error is not None:
+        return installation_error
     return run_command(compose_base_args(install_dir) + ["restart"], cwd=install_dir, timeout=300)
 
 
 def stack_status(install_dir: Path) -> CommandResult:
+    installation_error = _check_installation_files(install_dir)
+    if installation_error is not None:
+        return installation_error
     return run_command(compose_base_args(install_dir) + ["ps"], cwd=install_dir, timeout=60)
 
 
 def stack_running(install_dir: Path) -> CommandResult:
+    installation_error = _check_installation_files(install_dir)
+    if installation_error is not None:
+        return installation_error
     result = run_command(compose_base_args(install_dir) + ["ps", "--status", "running", "--services"], cwd=install_dir, timeout=60)
     if not result.ok:
         return result
@@ -209,6 +252,9 @@ def stack_running(install_dir: Path) -> CommandResult:
 
 
 def stack_logs(install_dir: Path, tail: int = 300) -> CommandResult:
+    installation_error = _check_installation_files(install_dir)
+    if installation_error is not None:
+        return installation_error
     return run_command(compose_base_args(install_dir) + ["logs", "--tail", str(tail)], cwd=install_dir, timeout=120)
 
 
