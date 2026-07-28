@@ -4,6 +4,7 @@ import os
 import platform
 import shutil
 import subprocess
+import tempfile
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,11 +20,23 @@ class CommandResult:
     output: str
 
 
+def _command_cwd(cwd: Path | None) -> str | None:
+    if cwd is not None:
+        return str(cwd)
+    if platform.system().lower() != "windows":
+        return None
+
+    for candidate in (Path.home(), Path(tempfile.gettempdir())):
+        if candidate.is_dir():
+            return str(candidate)
+    return None
+
+
 def run_command(args: list[str], cwd: Path | None = None, timeout: int | None = None) -> CommandResult:
     try:
         completed = subprocess.run(
             args,
-            cwd=str(cwd) if cwd else None,
+            cwd=_command_cwd(cwd),
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -33,6 +46,8 @@ def run_command(args: list[str], cwd: Path | None = None, timeout: int | None = 
         return CommandResult(completed.returncode == 0, completed.stdout.strip())
     except FileNotFoundError:
         return CommandResult(False, f"Command not found: {args[0]}")
+    except OSError as exc:
+        return CommandResult(False, f"Could not run {' '.join(args)}: {exc}")
     except subprocess.TimeoutExpired as exc:
         output = exc.stdout or ""
         return CommandResult(False, f"Command timed out.\n{output}".strip())
@@ -49,7 +64,7 @@ def stream_command(
     try:
         process = subprocess.Popen(
             args,
-            cwd=str(cwd) if cwd else None,
+            cwd=_command_cwd(cwd),
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -57,6 +72,8 @@ def stream_command(
         )
     except FileNotFoundError:
         return CommandResult(False, f"Command not found: {args[0]}")
+    except OSError as exc:
+        return CommandResult(False, f"Could not run {' '.join(args)}: {exc}")
 
     def kill_process() -> None:
         if process.poll() is None:
@@ -148,6 +165,7 @@ def docker_login(registry: str, username: str, token: str) -> CommandResult:
     try:
         completed = subprocess.run(
             ["docker", "login", registry, "-u", username, "--password-stdin"],
+            cwd=_command_cwd(None),
             input=token,
             text=True,
             stdout=subprocess.PIPE,
@@ -158,6 +176,8 @@ def docker_login(registry: str, username: str, token: str) -> CommandResult:
         return CommandResult(completed.returncode == 0, completed.stdout.strip())
     except FileNotFoundError:
         return CommandResult(False, "Docker CLI is not installed or is not on PATH.")
+    except OSError as exc:
+        return CommandResult(False, f"Could not run docker login: {exc}")
 
 
 def pull_images(install_dir: Path, on_line: Callable[[str], None] | None = None) -> CommandResult:
