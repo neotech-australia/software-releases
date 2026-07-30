@@ -82,6 +82,7 @@ if sys.platform == "darwin":
             "CFBundleShortVersionString": "1.4.0",
             "CFBundleVersion": "1.4.0",
             "LSMinimumSystemVersion": "11.0",
+            "NSPrincipalClass": "NSApplication",
             "NSHighResolutionCapable": True,
         },
     )
