@@ -23,6 +23,8 @@ class MockTransport(Transport):
         MASK="0000",
         UPLINKPERIOD="1800",
         GPSDECIMATIONFACTOR="8",
+        BATTERYCHARGE="85",
+        BATTERYCAPACITY="1900",
         HWSTATUS="0",
     )
 

@@ -22,7 +22,7 @@ Visual diagrams for the current architecture. For narrative descriptions, see `A
 │  ┌────────────┬───────────┬──────────┬───────────┬──────────────┐   │
 │  │ app.py     │ profile_  │ profile_ │ com_      │ device_      │   │
 │  │ (main      │ list.py   │ editor   │ selector  │ frame.py     │   │
-│  │  window)   │ (cards)   │ .py      │ .py       │ (3 tabs)     │   │
+│  │  window)   │ (cards)   │ .py      │ .py       │ (4 tabs)     │   │
 │  └─────┬──────┴─────┬─────┴────┬────┴─────┬─────┴──────┬───────┘   │
 │        │            │          │          │            │           │
 │  ┌─────┴────────────┴──────────┴──────────┴────────────┴───────┐   │
@@ -293,7 +293,7 @@ User clicks Cancel (or any conflicting action)
                                         └──────────────────────────┘
 ```
 
-GUI note: `config_tool/gui/app.py` reaches into `controller/device_controller.py` and `controller/profile_service.py` only. `info_panel.py` stands apart (imports only `theme`, `paths`, `__version__`, PIL). `board_3d_viewer.py` has no application imports.
+GUI note: `config_tool/gui/app.py` reaches into `controller/device_controller.py` and `controller/profile_service.py` only. `info_panel.py` stands apart (imports only `theme`, `paths`, `__version__`, PIL). `board_3d_viewer.py` has no application imports. `battery_editor.py` is owned by `device_frame.py` and calls controller battery methods through the app.
 
 ---
 
@@ -332,6 +332,12 @@ GUI note: `config_tool/gui/app.py` reaches into `controller/device_controller.py
 │ + temperature: float                                │
 │ + battery_charge_percent: int                       │
 │ + battery_voltage_v: float                          │
+│ Battery persistence fields (writable, from dump):   │
+│ + BATTERYCHARGE: str   (percent, 0–100, writable)   │
+│ + BATTERYCAPACITY: str (mAh, >0, writable)          │
+│ Lifetime (derived, not stored on device):           │
+│ + battery_lifetime_days: Optional[int]              │
+│   (models/battery.py formula: charge-based drain)   │
 │ GPS fields (from GPSFIX):                           │
 │ + latitude / longitude: float                       │
 │ + altitude: float                                   │
@@ -358,6 +364,8 @@ GUI note: `config_tool/gui/app.py` reaches into `controller/device_controller.py
 │ MASK             │ AT      │ Yes        │ Yes                │
 │ UPLINKPERIOD     │ ATC     │ Yes        │ Yes                │
 │ GPSDECIMATIONFACTOR│ ATC    │ Yes        │ Yes                │
+│ BATTERYCHARGE    │ ATC     │ Yes        │ No (battery tab)   │
+│ BATTERYCAPACITY  │ ATC     │ Yes        │ No (battery tab)   │
 │ HWSTATUS         │ ATC     │ No (R/O)   │ No                 │
 ├──────────────────┼─────────┼────────────┼────────────────────┤
 │ Action keys (ATC, not writable, not in profile):            │
@@ -368,7 +376,7 @@ GUI note: `config_tool/gui/app.py` reaches into `controller/device_controller.py
 └──────────────────┴─────────┴────────────┴────────────────────┘
 ```
 
-BAND is displayed as a readable name using the `BAND_OPTIONS` / `BAND_BY_ID` tables in `constants.py` (`format_band_value()`), e.g. `EU868 - 868 MHz Europe (4)`.
+BAND is displayed as a readable name using the `BAND_OPTIONS` / `BAND_BY_ID` tables in `constants.py` (`format_band_value()`), e.g. `EU868 - 868 MHz Europe (4)`. `BATTERYCHARGE` / `BATTERYCAPACITY` are writable ATC keys exposed on the **Battery** tab (not part of a configuration profile).
 
 ---
 
@@ -396,7 +404,8 @@ BAND is displayed as a readable name using the `BAND_OPTIONS` / `BAND_BY_ID` tab
 │  │  │  Port: [▼ COM3] [↻]    [Connect] │  │  │
 │  │  └──────────────────────────────────┘  │  │
 │  │  ┌── DeviceFrame (tabs) ────────────┐  │  │  ← when connected
-│  │  │  Configuration │ Measurements│ GPS │  │  │
+│  │  │ Configuration │ Measurements│GPS │  │  │
+│  │  │      │ Battery                    │  │  │
 │  │  │  ┌──────────────────────────────┐ │  │  │
 │  │  │  │ DevEUI: ...  [📋]            │ │  │  │
 │  │  │  │ AppEUI: ...  [📋]            │ │  │  │
@@ -417,6 +426,9 @@ BAND is displayed as a readable name using the `BAND_OPTIONS` / `BAND_BY_ID` tab
 
 Measurements tab:  Tilt X, Tilt Y, Temperature, Compass Heading + [3D View]
 GPS tab:           Latitude, Longitude, Altitude + [Poll GPS Fix] (progress bar)
+Battery tab:       Remaining Charge (%) + ✎ | Estimated Lifetime (days)
+                   Battery Voltage (V) | Battery Capacity (mAh) + ✎
+                   (✎ = opens BatteryEditorWindow to read/change value)
 ```
 
 ---
@@ -449,7 +461,7 @@ GPS tab:           Latitude, Longitude, Altitude + [Poll GPS Fix] (progress bar)
 
 The `_run_async()` method spawns a daemon thread. Blocking serial I/O runs in the thread. UI updates are scheduled on the main thread via `self.after(0, callback)`. The `_busy` flag prevents concurrent operations, and `set_busy(True)` disables all interactive widgets during I/O.
 
-**Action guarding:** operations that would conflict with an in-progress GPS poll first call `_cancel_gps_if_active()` (graceful `ABORTGPSFIX`, falling back to `abort()`), then proceed.
+**Action guarding:** operations that would conflict with an in-progress GPS poll first call `_cancel_gps_if_active()` (graceful `ABORTGPSFIX`, falling back to `abort()`), then proceed. Battery edits from the Battery tab follow the same `_run_async` pattern (a daemon thread calls `read_battery_value` / `write_battery_value`, then updates the UI via `after(0, ...)`).
 
 ---
 
@@ -468,6 +480,8 @@ PC                                        Device
 │  MASK=0000                                │
 │  UPLINKPERIOD=1800                        │
 │  GPSDECIMATIONFACTOR=8                    │
+│  BATTERYCHARGE=85                         │
+│  BATTERYCAPACITY=1900                     │
 │  HWSTATUS=0                               │
 │  OK                                       │
 │ ◄───────────────────────────────────────  │
@@ -497,3 +511,15 @@ Action commands (no config session required):
 
   ATC+ABORTGPSFIX\r\n
     → OK  (cancels pending GPSFIX)
+
+Battery parameters (reported in dump; read/write outside config session):
+
+  ATC+BATTERYCHARGE=?\r\n
+    → ATC+BATTERYCHARGE=<percent> + OK     (read remaining charge %)
+  ATC+BATTERYCHARGE=<percent>\r\n           (e.g. 100 after a fresh battery)
+    → OK
+
+  ATC+BATTERYCAPACITY=?\r\n
+    → ATC+BATTERYCAPACITY=<mAh> + OK       (read total capacity)
+  ATC+BATTERYCAPACITY=<mAh>\r\n             (e.g. 1900 after a battery swap)
+    → OK

@@ -57,10 +57,12 @@ The application has **four layers** and **two cross-cutting modules**:
 - **`profile_list.py`** — Scrollable list of profile cards with a floating action button. Each card has a checkbox (active selection), name/APPEUI display, and a gear button (edit).
 - **`profile_editor.py`** — Modal popup for creating/editing profiles. Fields for all 7 profile attributes. Buttons: Save, Cancel, Import, Export, Delete.
 - **`com_selector.py`** — COM port dropdown with Refresh and Connect buttons.
-- **`device_frame.py`** — Displays device parameters in a **tabbed interface** with three tabs:
+- **`device_frame.py`** — Displays device parameters in a **tabbed interface** with four tabs:
   - **Configuration** — Standard device parameters (DevEUI, AppEUI, AppKey, Band, Mask, Uplink Period, GPS Decimation, HW Status). Copy buttons for EUI/Key fields. Configure and Disconnect buttons. Band is shown as a human-readable name (e.g. `EU868 - 868 MHz Europe (4)`) via `format_band_value`.
   - **Measurements** — Real-time sensor readings: Tilt X, Tilt Y, Temperature, Compass Heading. Includes a **"3D View"** button to launch the 3D board orientation viewer.
   - **GPS** — GPS fix data: Longitude, Latitude, Altitude. Includes a **"Poll GPS Fix"** button with a determinate progress bar (up to 30 seconds) and Cancel button.
+  - **Battery** — Battery status: remaining charge (%), estimated remaining lifetime (days, computed from device config via `estimate_battery_lifetime_days`), battery voltage (from `ATC+FULLSAMPLE`), and total capacity (mAh). Edit (pencil) icons next to Remaining Charge and Battery Capacity launch the `BatteryEditorWindow` popup to read/change those values, with how-to instructions and a summary tooltip.
+- **`battery_editor.py`** — Modal popup to read/change `BATTERYCHARGE` (%) and `BATTERYCAPACITY` (mAh) values. Shows guidance on when each value should be edited (e.g. installing a fresh battery → set charge to 100%, or paralleling batteries → update capacity) and a compact version of that guidance as a tooltip. Save/Cancel buttons. Hooks back into the app via the `on_save` callback.
 - **`board_3d_viewer.py`** — 3D board orientation viewer using **VPython**. Displays a cuboid representing the embedded board, rotated according to tilt_x (roll) and tilt_y (pitch) angles. Runs in a background daemon thread. Uses a thread-safe `AngleSource` object to receive live sensor data. Falls back to a gentle automated sweep when real data is stale (>2 seconds). Fully isolated from the rest of the application.
 - **`status_bar.py`** — Bottom status message with a Logs button.
 - **`log_window.py`** — Toplevel window showing in-memory log buffer.

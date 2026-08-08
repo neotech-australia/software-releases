@@ -84,6 +84,7 @@ class ConfigToolApp(ctk.CTk):
             on_tab_change=self._on_tab_change,
             on_gps_poll=self._on_gps_poll,
             on_gps_cancel=self._on_gps_cancel,
+            on_battery_edit=self._on_battery_edit,
         )
         self.device_frame.grid(row=0, column=0, sticky="nsew")
         self.device_frame.grid_remove()
@@ -406,6 +407,69 @@ class ConfigToolApp(ctk.CTk):
         self.status_bar.set_status(message)
         if not success:
             messagebox.showerror("Configuration", message)
+
+    # --------------- Battery editing ---------------
+
+    def _on_battery_edit(self, focus_key: str) -> None:
+        """User clicked an edit icon on the Battery tab.
+
+        Reads the current charge/capacity from the device in the background,
+        then opens the editor popup with fresh values.
+        """
+        if self._busy:
+            return
+        if not self.controller.is_connected:
+            self._show_error("Not connected to a device")
+            return
+        self._run_async(self._battery_load_worker, focus_key)
+
+    def _battery_load_worker(self, focus_key: str) -> None:
+        """Background: read battery charge + capacity, then open the editor."""
+        try:
+            charge = self.controller.read_battery_charge()
+            capacity = self.controller.read_battery_capacity()
+        except Exception as exc:
+            self.after(0, lambda e=exc: self._show_error(f"Failed to read battery values: {e}"))
+            return
+
+        self.after(
+            0,
+            lambda c=charge, cap=capacity: self.device_frame.open_battery_editor(
+                charge_percent=c,
+                capacity_mah=cap,
+                on_save=self._on_battery_save,
+            ),
+        )
+
+    def _on_battery_save(self, key: str, value: str) -> None:
+        """User saved a new battery value in the editor — write it to the device."""
+        if self._busy or not self.controller.is_connected:
+            return
+        self._run_async(self._battery_write_worker, key, value)
+
+    def _battery_write_worker(self, key: str, value: str) -> None:
+        """Background: write the battery parameter to the device and refresh."""
+        try:
+            if key == "BATTERYCHARGE":
+                self.controller.write_battery_charge(value)
+            elif key == "BATTERYCAPACITY":
+                self.controller.write_battery_capacity(value)
+            else:
+                return
+            params = self.controller.device_state
+            self.after(
+                0,
+                lambda p=params, k=key, v=value: self._battery_write_done(p, k, v),
+            )
+        except Exception as exc:
+            self.after(0, lambda e=exc: self._show_error(f"Failed to save {key}: {e}"))
+
+    def _battery_write_done(self, params, key: str, value: str) -> None:
+        """Battery write succeeded — refresh display and status."""
+        if params:
+            self.device_frame.set_parameters(params)
+        label = "Remaining battery" if key == "BATTERYCHARGE" else "Total battery capacity"
+        self.status_bar.set_status(f"{label} updated to {value}")
 
     # --------------- Error / Logs ---------------
 

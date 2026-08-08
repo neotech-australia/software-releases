@@ -4,11 +4,45 @@ LINE_ENDING = "\r\n"
 BAUD_RATE = 115200
 
 BUILTIN_KEYS = frozenset({"DEVEUI", "APPEUI", "APPKEY", "BAND", "MASK"})
-CUSTOM_KEYS = frozenset({"UPLINKPERIOD", "GPSDECIMATIONFACTOR", "HWSTATUS", "SAMPLETILT", "GPSFIX", "FULLSAMPLE", "ABORTGPSFIX"})
-WRITABLE_KEYS = frozenset({"APPEUI", "APPKEY", "BAND", "MASK", "UPLINKPERIOD", "GPSDECIMATIONFACTOR"})
+CUSTOM_KEYS = frozenset(
+    {
+        "UPLINKPERIOD",
+        "GPSDECIMATIONFACTOR",
+        "BATTERYCHARGE",
+        "BATTERYCAPACITY",
+        "HWSTATUS",
+        "SAMPLETILT",
+        "GPSFIX",
+        "FULLSAMPLE",
+        "ABORTGPSFIX",
+    }
+)
+WRITABLE_KEYS = frozenset(
+    {
+        "APPEUI",
+        "APPKEY",
+        "BAND",
+        "MASK",
+        "UPLINKPERIOD",
+        "GPSDECIMATIONFACTOR",
+        "BATTERYCHARGE",
+        "BATTERYCAPACITY",
+    }
+)
 PROFILE_KEYS = frozenset({"APPEUI", "APPKEY", "BAND", "MASK", "UPLINKPERIOD", "GPSDECIMATIONFACTOR"})
 DEVICE_DUMP_KEYS = frozenset(
-    {"DEVEUI", "APPEUI", "APPKEY", "BAND", "MASK", "UPLINKPERIOD", "GPSDECIMATIONFACTOR", "HWSTATUS"}
+    {
+        "DEVEUI",
+        "APPEUI",
+        "APPKEY",
+        "BAND",
+        "MASK",
+        "UPLINKPERIOD",
+        "GPSDECIMATIONFACTOR",
+        "BATTERYCHARGE",
+        "BATTERYCAPACITY",
+        "HWSTATUS",
+    }
 )
 
 # Bands where MASK applies (US915, CN470, AU915, LA915)

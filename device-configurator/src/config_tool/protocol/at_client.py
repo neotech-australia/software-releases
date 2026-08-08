@@ -259,3 +259,19 @@ class AtClient:
         temperature, battery_charge_percent, battery_voltage_v populated.
         """
         return self.run_action("FULLSAMPLE")
+
+    def read_battery_charge(self) -> str:
+        """Read the remaining battery charge percentage (ATC+BATTERYCHARGE=?)."""
+        return self.read_parameter("BATTERYCHARGE")
+
+    def write_battery_charge(self, percent: str) -> None:
+        """Write the remaining battery charge percentage (ATC+BATTERYCHARGE=<percent>)."""
+        self.write_parameter("BATTERYCHARGE", percent)
+
+    def read_battery_capacity(self) -> str:
+        """Read the total battery capacity in mAh (ATC+BATTERYCAPACITY=?)."""
+        return self.read_parameter("BATTERYCAPACITY")
+
+    def write_battery_capacity(self, mah: str) -> None:
+        """Write the total battery capacity in mAh (ATC+BATTERYCAPACITY=<mAh>)."""
+        self.write_parameter("BATTERYCAPACITY", mah)

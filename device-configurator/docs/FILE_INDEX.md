@@ -44,7 +44,8 @@ This document lists every source file in the codebase, its role, and how it rela
 | `profile_list.py` | Scrollable list of profile cards + floating Add (FAB) button. Each card: active checkbox, name/APPEUI, gear edit button. |
 | `profile_editor.py` | Modal popup for creating/editing profiles. Fields for all 7 profile attributes; Save/Cancel/Import/Export/Delete buttons. |
 | `com_selector.py` | COM port dropdown + Refresh + Connect buttons. |
-| `device_frame.py` | Connected-device view with 3 tabs: Configuration (params + copy), Measurements (sensors + 3D View), GPS (fix + Poll GPS Fix). |
+| `device_frame.py` | Connected-device view with 4 tabs: Configuration (params + copy), Measurements (sensors + 3D View), GPS (fix + Poll GPS Fix), Battery (charge + ✎, estimated lifetime, voltage, capacity + ✎). |
+| `battery_editor.py` | Modal popup (`BatteryEditorWindow`) to read/change `BATTERYCHARGE` / `BATTERYCAPACITY` on the device. Shows when-to-edit instructions; brief version shown as tooltip. |
 | `board_3d_viewer.py` | Standalone VPython 3D board orientation viewer. `AngleSource` thread-safe angle container; runs in a daemon thread. No app imports. |
 | `status_bar.py` | Bottom status message + Logs button. |
 | `log_window.py` | Toplevel window rendering the in-memory log buffer. |
@@ -56,7 +57,7 @@ This document lists every source file in the codebase, its role, and how it rela
 
 | File | Purpose |
 |------|---------|
-| `device_controller.py` | `DeviceController` — transport lifecycle, `read_device()`, `apply_profile()`, `abort()`, `abort_gps_fix()`, `sample_tilt()`, `gps_fix()`, `full_sample()`, `disconnect()`. Exposes `at_client`, `device_state`, `is_connected`, `connected_port`. |
+| `device_controller.py` | `DeviceController` — transport lifecycle, `read_device()`, `apply_profile()`, `abort()`, `abort_gps_fix()`, `sample_tilt()`, `gps_fix()`, `full_sample()`, `read_battery_value()`, `write_battery_value()`, `disconnect()`. Exposes `at_client`, `device_state`, `is_connected`, `connected_port`. |
 | `profile_service.py` | `ProfileService` — thin wrapper over `ProfileStore` (CRUD, active profile, import/export). |
 
 ---
@@ -66,7 +67,8 @@ This document lists every source file in the codebase, its role, and how it rela
 | File | Purpose |
 |------|---------|
 | `profile.py` | `ConfigurationProfile` dataclass (name, APPEUI, APPKEY, BAND, MASK, UPLINKPERIOD, GPSDECIMATIONFACTOR, id). `validate()`, `to_dict()`, `from_dict()`, `writable_values()`, `create_profile()`. |
-| `device_state.py` | `DeviceParameters` dataclass with all device + sensor + GPS fields. `from_key_value_lines()`, `diff_writable()`, `as_dict()`, `get()`/`set()`. |
+| `device_state.py` | `DeviceParameters` dataclass with all device + sensor + GPS fields plus `BATTERYCHARGE` / `BATTERYCAPACITY` persistence fields and `battery_lifetime_days` (derived). `from_key_value_lines()`, `diff_writable()`, `as_dict()`, `get()`/`set()`. |
+| `battery.py` | Battery lifetime estimator. `estimate_battery_lifetime_days(charge_pct, capacity_mah, uplink_period, gps_decimation)` — charge-based drain model (GPS acquisition + sensor sampling per uplink). |
 
 ---
 
@@ -84,11 +86,11 @@ This document lists every source file in the codebase, its role, and how it rela
 | File | Purpose |
 |------|---------|
 | `serial_transport.py` | `Transport` ABC + `SerialTransport` (pyserial, 115200 8N1). `read_line()` raises `TimeoutError`. `list_serial_ports()`. |
-| `mock_transport.py` | `MockTransport` for offline testing — scriptable responses to config dump, writes, action commands (SAMPLETILT, GPSFIX, FULLSAMPLE, ABORTGPSFIX). |
-| `at_client.py` | `AtClient` — high-level protocol client: `start_config()`, `write_parameter()`, `read_parameter()`, `config_done()`, `run_action()`, `drain()`, `sample_tilt()`, `gps_fix()`, `abort_gps_fix()`, `full_sample()`, `ensure_config_done()`. |
+| `mock_transport.py` | `MockTransport` for offline testing — scriptable responses to config dump (incl. BATTERYCHARGE/BATTERYCAPACITY), writes, action commands (SAMPLETILT, GPSFIX, FULLSAMPLE, ABORTGPSFIX). |
+| `at_client.py` | `AtClient` — high-level protocol client: `start_config()`, `write_parameter()`, `read_parameter()`, `config_done()`, `run_action()`, `drain()`, `sample_tilt()`, `gps_fix()`, `abort_gps_fix()`, `full_sample()`, `read_battery_charge()`/`write_battery_charge()`, `read_battery_capacity()`/`write_battery_capacity()`, `ensure_config_done()`. |
 | `commands.py` | String builders: `build_write_command`, `build_read_command`, `build_start_config`, `build_config_done`, `build_action_command`. Prefix resolution (`AT` vs `ATC`). |
 | `parser.py` | Response parsing: `parse_dump_lines`, `parse_echo_value`, `is_ok_line`, `is_error_line`, `is_device_log_line`, `is_ignorable_line`, `prefix_for_key`. Exceptions: `AtResponseError`, `TimeoutError`, `ProtocolError`. `ACTION_ERROR_LINES`. |
-| `constants.py` | Protocol constants: `LINE_ENDING`, `BAUD_RATE`, key sets (BUILTIN_KEYS, CUSTOM_KEYS incl. SAMPLETILT/GPSFIX/FULLSAMPLE/ABORTGPSFIX, WRITABLE_KEYS, PROFILE_KEYS, DEVICE_DUMP_KEYS), `MASK_APPLICABLE_BANDS`, `AT_OK`, `AT_ERRORS`, timeouts. Also `BAND_OPTIONS`/`BAND_BY_ID` + `format_band_option()`/`format_band_value()`. |
+| `constants.py` | Protocol constants: `LINE_ENDING`, `BAUD_RATE`, key sets (BUILTIN_KEYS, CUSTOM_KEYS incl. SAMPLETILT/GPSFIX/FULLSAMPLE/ABORTGPSFIX/BATTERYCHARGE/BATTERYCAPACITY, WRITABLE_KEYS incl. BATTERYCHARGE/BATTERYCAPACITY, PROFILE_KEYS, DEVICE_DUMP_KEYS incl. BATTERYCHARGE/BATTERYCAPACITY), `MASK_APPLICABLE_BANDS`, `AT_OK`, `AT_ERRORS`, timeouts. Also `BAND_OPTIONS`/`BAND_BY_ID` + `format_band_option()`/`format_band_value()`. |
 | `errors.py` | Human-readable message map for AT error codes. |
 
 ---
@@ -103,3 +105,4 @@ Flat unit-test files at the top level of `tests/`:
 | `test_at_client_mock.py` | `AtClient` driven over the mock transport. |
 | `test_profile_store.py` | `ProfileStore` CRUD + import/export. |
 | `test_validation.py` | Profile field validators. |
+| `test_battery.py` | Battery lifetime estimator + device-state BATTERYCHARGE/BATTERYCAPACITY parsing. |

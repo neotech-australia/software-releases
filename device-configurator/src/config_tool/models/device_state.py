@@ -15,6 +15,8 @@ class DeviceParameters:
     MASK: str = ""
     UPLINKPERIOD: str = ""
     GPSDECIMATIONFACTOR: str = ""
+    BATTERYCHARGE: str = ""
+    BATTERYCAPACITY: str = ""
     HWSTATUS: str = ""
     tilt_x: str = ""
     tilt_y: str = ""

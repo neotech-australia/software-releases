@@ -155,6 +155,34 @@ class DeviceController:
             raise RuntimeError("Not connected to a device")
         return self._client.full_sample()
 
+    def read_battery_charge(self) -> str:
+        """Read the remaining battery charge percentage from the device."""
+        if self._client is None:
+            raise RuntimeError("Not connected to a device")
+        return self._client.read_battery_charge()
+
+    def write_battery_charge(self, percent: str) -> None:
+        """Write the remaining battery charge percentage to the device."""
+        if self._client is None:
+            raise RuntimeError("Not connected to a device")
+        self._client.write_battery_charge(percent)
+        if self._device_state is not None:
+            self._device_state.set("BATTERYCHARGE", percent)
+
+    def read_battery_capacity(self) -> str:
+        """Read the total battery capacity (mAh) from the device."""
+        if self._client is None:
+            raise RuntimeError("Not connected to a device")
+        return self._client.read_battery_capacity()
+
+    def write_battery_capacity(self, mah: str) -> None:
+        """Write the total battery capacity (mAh) to the device."""
+        if self._client is None:
+            raise RuntimeError("Not connected to a device")
+        self._client.write_battery_capacity(mah)
+        if self._device_state is not None:
+            self._device_state.set("BATTERYCAPACITY", mah)
+
     def _ensure_connected(self) -> None:
         if not self.is_connected or self._client is None:
             raise RuntimeError("Not connected to a device")
