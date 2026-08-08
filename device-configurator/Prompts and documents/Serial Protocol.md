@@ -314,6 +314,61 @@ OK
 
 ---
 
+### BATTERYCAPACITY
+
+
+| Item            | Detail                                                                                                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Description** | Total battery capacity in milliamp-hours (mAh). Used by the battery charge estimator (coulomb counting).               |
+| **Write**       | `ATC+BATTERYCAPACITY=<mAh>` — unsigned decimal integer, must be > 0.                                                      |
+| **Read**        | `ATC+BATTERYCAPACITY=?` → `ATC+BATTERYCAPACITY=<mAh>` then `OK`.                                                        |
+| **Help**        | `ATC+BATTERYCAPACITY?` → short description, then `OK`.                                                                  |
+| **Errors**      | `AT_PARAM_ERROR` if the value is missing, not a decimal integer, or `0`.                                                |
+| **Persists**    | Immediately written to flash (`OK` is returned only after a successful write).                                          |
+
+
+**PC example (set capacity to 1900 mAh, e.g. after a battery swap)**
+
+```
+ATC+BATTERYCAPACITY=1900\r\n
+```
+
+Expected response:
+
+```
+OK
+```
+
+---
+
+### BATTERYCHARGE
+
+
+| Item            | Detail                                                                                                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Description** | Remaining battery charge, reported as an integer percent (0–100) of full capacity.                                      |
+| **Write**       | `ATC+BATTERYCHARGE=<percent>` — unsigned decimal integer in `0`–`100`.                                                  |
+| **Read**        | `ATC+BATTERYCHARGE=?` → `ATC+BATTERYCHARGE=<percent>` then `OK`.                                                        |
+| **Help**        | `ATC+BATTERYCHARGE?` → short description, then `OK`.                                                                    |
+| **Errors**      | `AT_PARAM_ERROR` if the value is missing, not a decimal integer, or outside `0`–`100`.                                  |
+| **Persists**    | Immediately written to flash (`OK` is returned only after a successful write).                                          |
+
+**Note:** Setting this value bypasses the normal coulomb-counting estimation. It is intended for calibrating or restoring battery state, e.g. after installing a fresh battery (`ATC+BATTERYCHARGE=100`). Under normal operation, this value is estimated automatically from firmware power phases and decreases over time; the read value reflects the current estimate.
+
+**PC example (mark battery as full after replacement)**
+
+```
+ATC+BATTERYCHARGE=100\r\n
+```
+
+Expected response:
+
+```
+OK
+```
+
+---
+
 ### HWSTATUS
 
 
