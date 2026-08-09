@@ -426,27 +426,49 @@ class DeviceFrame(ctk.CTkFrame):
         return f"~{days:.0f} days"
 
     def set_parameters(self, params: Optional[DeviceParameters]) -> None:
-        """Update all tab labels from a DeviceParameters object."""
+        """Update all tab labels from a DeviceParameters object.
+
+        Partial results (e.g. from FULLSAMPLE or GPSFIX action commands)
+        contain only a subset of device fields. Instead of blindly
+        overwriting every label — which would wipe the values read from the
+        config dump (DEVEUI, BAND, BATTERYCHARGE, etc.) with empty strings —
+        merge the incoming values into the last known device state so that
+        fields not present in the partial result keep their previous value.
+        """
         if params is None:
+            # Reset all labels
             for key, lbl in self._value_labels.items():
-                if key in {k for group in DISPLAY_GROUPS for k, _ in group}:
-                    lbl.configure(text="—")
+                lbl.configure(text="—")
             self._params = None
             return
+
+        # Merge: keep existing known values, overlay the non-empty values
+        # of the incoming (possibly partial) parameter set.
+        if self._params is not None:
+            merged: dict[str, str] = self._params.as_dict()
+            for k, v in params.as_dict().items():
+                if v:
+                    merged[k] = v
+            merged_params = DeviceParameters()
+            for k, v in merged.items():
+                merged_params.set(k, v)
+            params = merged_params
 
         self._params = params
 
         for key, lbl in self._value_labels.items():
             value = params.get(key)
-            if value is not None:
-                # Apply rounding rules for measurement fields
-                if key == "temperature":
-                    value = self._format_measurement(value, 1)
-                elif key == "compass_heading":
-                    value = self._format_measurement(value, 0)
-                elif key == "BAND":
-                    value = format_band_value(value)
-                lbl.configure(text=value)
+            if value is None or value == "":
+                lbl.configure(text="—")
+                continue
+            # Apply rounding rules for measurement fields
+            if key == "temperature":
+                value = self._format_measurement(value, 1)
+            elif key == "compass_heading":
+                value = self._format_measurement(value, 0)
+            elif key == "BAND":
+                value = format_band_value(value)
+            lbl.configure(text=value)
 
         # Compute estimated battery lifetime for the Battery tab.
         lifetime_lbl = self._value_labels.get("battery_lifetime")
