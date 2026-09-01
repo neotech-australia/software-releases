@@ -6,7 +6,9 @@ import customtkinter as ctk
 from typing import Callable, Optional
 
 from config_tool.gui import theme
+from config_tool.gui.battery_editor import EDITOR_TOOLTIPS, BatteryEditorWindow
 from config_tool.gui.board_3d_viewer import AngleSource
+from config_tool.models.battery import estimate_battery_lifetime_days
 from config_tool.models.device_state import DeviceParameters
 from config_tool.gui.tooltip import ToolTip
 from config_tool.protocol.constants import format_band_value
@@ -50,6 +52,7 @@ class DeviceFrame(ctk.CTkFrame):
         on_tab_change: Optional[Callable[[str], None]] = None,
         on_gps_poll: Optional[Callable[[], None]] = None,
         on_gps_cancel: Optional[Callable[[], None]] = None,
+        on_battery_edit: Optional[Callable[[str], None]] = None,
         **kwargs,
     ) -> None:
         super().__init__(master, **kwargs)
@@ -58,8 +61,12 @@ class DeviceFrame(ctk.CTkFrame):
         self._on_tab_change = on_tab_change
         self._on_gps_poll = on_gps_poll
         self._on_gps_cancel = on_gps_cancel
+        self._on_battery_edit = on_battery_edit
         self._value_labels: dict[str, ctk.CTkLabel] = {}
         self._angle_source = AngleSource()
+        self._params: Optional[DeviceParameters] = None
+        self._battery_editor: Optional[BatteryEditorWindow] = None
+        self._on_battery_save: Optional[Callable[[str, str], None]] = None
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -71,6 +78,7 @@ class DeviceFrame(ctk.CTkFrame):
         self.tab_config = self.tabview.add("Configuration")
         self.tab_measurements = self.tabview.add("Measurements")
         self.tab_gps = self.tabview.add("GPS")
+        self.tab_battery = self.tabview.add("Battery")
 
         # Tab change detection via configure callback on each segment button
         self.tabview.configure(command=self._on_tab_selected)
@@ -79,6 +87,7 @@ class DeviceFrame(ctk.CTkFrame):
         self._build_config_tab()
         self._build_measurements_tab()
         self._build_gps_tab()
+        self._build_battery_tab()
 
         # ---- GPS progress bar overlay (hidden initially) ----
         self._gps_progress_frame: Optional[ctk.CTkFrame] = None
@@ -193,6 +202,99 @@ class DeviceFrame(ctk.CTkFrame):
         )
         self.gps_poll_btn.grid(row=len(GPS_FIELDS), column=0, columnspan=2, pady=(12, 8))
 
+    def _build_battery_tab(self) -> None:
+        """Battery fields inside the 'Battery' tab.
+
+        Shows remaining charge (editable), estimated lifetime, voltage,
+        and total capacity (editable). Edit icons open the battery editor.
+        """
+        grid = self.tab_battery
+        grid.grid_columnconfigure(0, weight=0)
+        grid.grid_columnconfigure(1, weight=1)
+        grid.grid_columnconfigure(2, weight=0)
+
+        # (field_key, label, value_fmt)
+        fields = [
+            ("BATTERYCHARGE", "Remaining Battery", "charge"),
+            ("battery_lifetime", "Estimated Lifetime", "lifetime"),
+            ("battery_voltage_v", "Battery Voltage", "voltage"),
+            ("BATTERYCAPACITY", "Total Capacity", "capacity"),
+        ]
+        editable = {"BATTERYCHARGE", "BATTERYCAPACITY"}
+
+        for row_idx, (key, label, _fmt) in enumerate(fields):
+            # Label
+            ctk.CTkLabel(grid, text=f"{label}:", anchor="w").grid(
+                row=row_idx, column=0, sticky="w", padx=(8, 8), pady=6
+            )
+
+            # Value
+            value_lbl = ctk.CTkLabel(grid, text="—", anchor="w")
+            value_lbl.grid(row=row_idx, column=1, sticky="ew", padx=4, pady=6)
+            self._value_labels[key] = value_lbl
+
+            # Edit button for editable fields only
+            if key in editable:
+                edit_btn = ctk.CTkButton(
+                    grid,
+                    text="✏️",
+                    width=34,
+                    height=28,
+                    command=lambda k=key: self._open_battery_editor(k),
+                )
+                edit_btn.grid(row=row_idx, column=2, padx=4, pady=6)
+                ToolTip(edit_btn, EDITOR_TOOLTIPS[key])
+
+    # ------------------------------------------------------------------
+    # Battery editing
+    # ------------------------------------------------------------------
+
+    def _open_battery_editor(self, focus_key: str) -> None:
+        """User clicked an edit icon — ask parent to load fresh values then open the editor."""
+        if self._on_battery_edit is not None:
+            self._on_battery_edit(focus_key)
+
+    def open_battery_editor(
+        self,
+        charge_percent: str,
+        capacity_mah: str,
+        on_save: Optional[Callable[[str, str], None]] = None,
+    ) -> None:
+        """Open the battery editor popup with the given current values.
+
+        on_save(key, value) is invoked when the user saves a new value,
+        allowing the parent to write it to the device.
+        """
+        if self._battery_editor is not None and self._battery_editor.winfo_exists():
+            self._battery_editor.lift()
+            self._battery_editor.focus_force()
+            return
+
+        self._on_battery_save = on_save
+        self._battery_editor = BatteryEditorWindow(
+            self,
+            charge_percent=charge_percent,
+            capacity_mah=capacity_mah,
+            on_save_charge=self._on_battery_charge_saved,
+            on_save_capacity=self._on_battery_capacity_saved,
+        )
+
+    def _on_battery_charge_saved(self, value: str) -> None:
+        """Callback from the editor: user saved a new charge percent."""
+        self._call_battery_save("BATTERYCHARGE", value)
+
+    def _on_battery_capacity_saved(self, value: str) -> None:
+        """Callback from the editor: user saved a new capacity mAh."""
+        self._call_battery_save("BATTERYCAPACITY", value)
+
+    def _call_battery_save(self, key: str, value: str) -> None:
+        """Close the editor and forward the save to the parent."""
+        if self._battery_editor is not None:
+            self._battery_editor.destroy()
+            self._battery_editor = None
+        if self._on_battery_save is not None:
+            self._on_battery_save(key, value)
+
     # ------------------------------------------------------------------
     # GPS Poll with progress bar
     # ------------------------------------------------------------------
@@ -300,25 +402,78 @@ class DeviceFrame(ctk.CTkFrame):
         except (ValueError, TypeError):
             return value_str
 
+    @staticmethod
+    def _format_lifetime(params: DeviceParameters) -> str:
+        """Format the estimated battery lifetime label from device params."""
+        charge_raw = params.get("BATTERYCHARGE")
+        capacity_raw = params.get("BATTERYCAPACITY")
+        uplink_raw = params.get("UPLINKPERIOD")
+        gps_dec_raw = params.get("GPSDECIMATIONFACTOR")
+
+        days = estimate_battery_lifetime_days(
+            charge_percent=charge_raw,
+            capacity_mah=capacity_raw,
+            uplink_period_s=uplink_raw,
+            gps_decimation_factor=gps_dec_raw,
+        )
+        if days is None:
+            return "—"
+        if days < 1.0:
+            return "< 1 day"
+        if days >= 365:
+            years = days / 365.0
+            return f"~{years:.1f} years"
+        return f"~{days:.0f} days"
+
     def set_parameters(self, params: Optional[DeviceParameters]) -> None:
-        """Update all tab labels from a DeviceParameters object."""
+        """Update all tab labels from a DeviceParameters object.
+
+        Partial results (e.g. from FULLSAMPLE or GPSFIX action commands)
+        contain only a subset of device fields. Instead of blindly
+        overwriting every label — which would wipe the values read from the
+        config dump (DEVEUI, BAND, BATTERYCHARGE, etc.) with empty strings —
+        merge the incoming values into the last known device state so that
+        fields not present in the partial result keep their previous value.
+        """
         if params is None:
+            # Reset all labels
             for key, lbl in self._value_labels.items():
-                if key in {k for group in DISPLAY_GROUPS for k, _ in group}:
-                    lbl.configure(text="—")
+                lbl.configure(text="—")
+            self._params = None
             return
+
+        # Merge: keep existing known values, overlay the non-empty values
+        # of the incoming (possibly partial) parameter set.
+        if self._params is not None:
+            merged: dict[str, str] = self._params.as_dict()
+            for k, v in params.as_dict().items():
+                if v:
+                    merged[k] = v
+            merged_params = DeviceParameters()
+            for k, v in merged.items():
+                merged_params.set(k, v)
+            params = merged_params
+
+        self._params = params
 
         for key, lbl in self._value_labels.items():
             value = params.get(key)
-            if value is not None:
-                # Apply rounding rules for measurement fields
-                if key == "temperature":
-                    value = self._format_measurement(value, 1)
-                elif key == "compass_heading":
-                    value = self._format_measurement(value, 0)
-                elif key == "BAND":
-                    value = format_band_value(value)
-                lbl.configure(text=value)
+            if value is None or value == "":
+                lbl.configure(text="—")
+                continue
+            # Apply rounding rules for measurement fields
+            if key == "temperature":
+                value = self._format_measurement(value, 1)
+            elif key == "compass_heading":
+                value = self._format_measurement(value, 0)
+            elif key == "BAND":
+                value = format_band_value(value)
+            lbl.configure(text=value)
+
+        # Compute estimated battery lifetime for the Battery tab.
+        lifetime_lbl = self._value_labels.get("battery_lifetime")
+        if lifetime_lbl is not None:
+            lifetime_lbl.configure(text=self._format_lifetime(params))
 
         # Push tilt angles to the 3D viewer if available
         tilt_x_str = params.get("tilt_x")
